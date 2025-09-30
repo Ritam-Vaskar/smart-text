@@ -92,7 +92,6 @@ function validateRecipients(recipients, channel) {
 router.post('/campaign',
   sendLimiter,
   authenticate,
-  authorize('marketing', 'admin'),
   checkLimits('send'),
   async (req, res, next) => {
     try {
@@ -255,7 +254,6 @@ router.post('/campaign',
 router.post('/',
   sendLimiter,
   authenticate,
-  authorize('marketing', 'admin'),
   checkLimits('send'),
   sanitizeInput,
   validate(schemas.createSendJob),
