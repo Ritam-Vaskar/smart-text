@@ -35,14 +35,14 @@ router.post('/',
       const { prompt, channel, tone, language, length, audience, nCandidates } = req.body;
       const userId = req.user._id;
 
-      // Prepare settings for AI service
+      // Prepare settings for AI service - always generate 4 variations
       const settings = {
         channel,
         tone,
         language,
         length,
         audience,
-        nCandidates: Math.min(nCandidates || 3, 10) // Cap at 10 candidates
+        nCandidates: 4 // Always generate 4 variations for user choice
       };
 
       // Generate messages using AI service

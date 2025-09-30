@@ -23,7 +23,7 @@ interface GenerationSettings {
   language: string;
   length: 'short' | 'medium' | 'long';
   audience: 'customers' | 'staff' | 'partners' | 'general';
-  nCandidates: number;
+
 }
 
 interface MessageCandidate {
@@ -62,7 +62,7 @@ export default function Generator() {
     language: 'en',
     length: 'medium',
     audience: 'customers',
-    nCandidates: 3
+  
   });
   
   const [result, setResult] = useState<GenerationResult | null>(null);
@@ -70,7 +70,7 @@ export default function Generator() {
   const [selectedCandidate, setSelectedCandidate] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [editingContent, setEditingContent] = useState<any>(null);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState<number | null>(null);
 
   const channelIcons = {
     email: Mail,
@@ -88,7 +88,11 @@ export default function Generator() {
     try {
       const response = await axios.post('/generate', {
         prompt: prompt.trim(),
-        ...settings
+        channel: settings.channel,
+        tone: settings.tone,
+        language: settings.language,
+        length: settings.length,
+        audience: settings.audience
       });
 
       setResult(response.data.data);
@@ -253,22 +257,7 @@ export default function Generator() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Number of Candidates
-              </label>
-              <select
-                value={settings.nCandidates}
-                onChange={(e) => setSettings(prev => ({ ...prev, nCandidates: parseInt(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-                <option value={4}>4</option>
-                <option value={5}>5</option>
-              </select>
-            </div>
+
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -346,15 +335,16 @@ Examples:
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {result.candidates.map((candidate, index) => (
                 <CandidateCard
-                  key={candidate.id}
+                  key={candidate.id || index}
                   candidate={candidate}
                   index={index}
                   isSelected={selectedCandidate === index}
                   onSelect={() => setSelectedCandidate(index)}
                   onCopy={() => copyToClipboard(candidate.content)}
+                  onSaveAsTemplate={() => setSaveDialogOpen(index)}
                   channel={settings.channel}
                 />
               ))}
@@ -362,30 +352,29 @@ Examples:
 
             {/* Actions */}
             <div className="flex flex-wrap gap-4 mt-6 pt-6 border-t border-gray-200">
-              <button
-                onClick={() => copyToClipboard(result.candidates[selectedCandidate]?.content)}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-              >
-                <Copy className="h-4 w-4" />
-                <span>Copy Selected</span>
-              </button>
+              <div className="text-sm text-gray-600 flex items-center">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Select message variations above to save as templates
+              </div>
+              
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={() => copyToClipboard(result.candidates[selectedCandidate]?.content)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                >
+                  <Copy className="h-4 w-4" />
+                  <span>Copy Selected</span>
+                </button>
 
-              <button
-                onClick={saveAsTemplate}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors"
-              >
-                <Save className="h-4 w-4" />
-                <span>Save as Template</span>
-              </button>
-
-              <button
-                onClick={() => regenerateWithSettings({ tone: settings.tone === 'friendly' ? 'professional' : 'friendly' })}
-                disabled={loading}
-                className="flex items-center space-x-2 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                <span>Regenerate</span>
-              </button>
+                <button
+                  onClick={() => regenerateWithSettings({ tone: settings.tone === 'friendly' ? 'professional' : 'friendly' })}
+                  disabled={loading}
+                  className="flex items-center space-x-2 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Regenerate</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -400,11 +389,12 @@ Examples:
       )}
 
       {/* Save Template Dialog */}
-      {saveDialogOpen && result && (
+      {saveDialogOpen !== null && result && (
         <SaveTemplateDialog
-          candidate={result.candidates[selectedCandidate]}
+          candidate={result.candidates[saveDialogOpen]}
+          candidateIndex={saveDialogOpen}
           onSave={handleSaveTemplate}
-          onClose={() => setSaveDialogOpen(false)}
+          onClose={() => setSaveDialogOpen(null)}
         />
       )}
     </div>
@@ -418,6 +408,7 @@ function CandidateCard({
   isSelected, 
   onSelect, 
   onCopy, 
+  onSaveAsTemplate,
   channel 
 }: {
   candidate: MessageCandidate;
@@ -425,6 +416,7 @@ function CandidateCard({
   isSelected: boolean;
   onSelect: () => void;
   onCopy: () => void;
+  onSaveAsTemplate: () => void;
   channel: string;
 }) {
   return (
@@ -485,12 +477,24 @@ function CandidateCard({
         )}
       </div>
 
-      <div className="flex justify-between items-center mt-3 text-xs text-gray-500">
-        <div>
+      <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+        <div className="text-xs text-gray-500">
           {candidate.metadata.charCount} chars • {candidate.metadata.wordCount} words
         </div>
-        <div>
-          Tokens: {candidate.tokens.join(', ') || 'None'}
+        <div className="flex items-center space-x-2">
+          <div className="text-xs text-gray-500">
+            {candidate.tokens.length > 0 ? `${candidate.tokens.length} tokens` : 'No tokens'}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSaveAsTemplate();
+            }}
+            className="flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors"
+          >
+            <Save className="h-3 w-3" />
+            <span>Save</span>
+          </button>
         </div>
       </div>
     </div>
@@ -566,10 +570,12 @@ function MessageAnalysis({ candidate, channel }: { candidate: MessageCandidate; 
 // Save Template Dialog Component
 function SaveTemplateDialog({ 
   candidate, 
+  candidateIndex,
   onSave, 
   onClose 
 }: {
   candidate: MessageCandidate;
+  candidateIndex: number;
   onSave: (data: any) => void;
   onClose: () => void;
 }) {
@@ -599,7 +605,7 @@ function SaveTemplateDialog({
       <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
         <div className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Save as Template
+            Save Message Variation {candidateIndex + 1} as Template
           </h3>
           
           <form onSubmit={handleSubmit} className="space-y-4">

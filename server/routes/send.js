@@ -21,6 +21,236 @@ const sendLimiter = rateLimit({
   }
 });
 
+// File upload utilities
+function parseCSV(csvContent) {
+  const lines = csvContent.trim().split('\n');
+  if (lines.length < 2) throw new Error('CSV must have at least a header and one data row');
+  
+  const headers = lines[0].split(',').map(h => h.trim());
+  const recipients = [];
+  
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',').map(v => v.trim());
+    if (values.length !== headers.length) continue;
+    
+    const recipient = {};
+    const customFields = {};
+    
+    headers.forEach((header, index) => {
+      const value = values[index];
+      if (['name', 'email', 'phone'].includes(header)) {
+        recipient[header] = value;
+      } else {
+        customFields[header] = value;
+      }
+    });
+    
+    if (Object.keys(customFields).length > 0) {
+      recipient.customFields = customFields;
+    }
+    
+    recipients.push(recipient);
+  }
+  
+  return recipients;
+}
+
+function validateRecipients(recipients, channel) {
+  const errors = [];
+  const validRecipients = [];
+  
+  for (const [index, recipient] of recipients.entries()) {
+    const rowErrors = [];
+    
+    if (!recipient.name || recipient.name.trim() === '') {
+      rowErrors.push('Name is required');
+    }
+    
+    if (channel === 'email') {
+      if (!recipient.email || recipient.email.trim() === '') {
+        rowErrors.push('Email is required');
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient.email)) {
+        rowErrors.push('Invalid email format');
+      }
+    } else {
+      if (!recipient.phone || recipient.phone.trim() === '') {
+        rowErrors.push('Phone is required');
+      }
+    }
+    
+    if (rowErrors.length > 0) {
+      errors.push({ row: index + 1, errors: rowErrors });
+    } else {
+      validRecipients.push(recipient);
+    }
+  }
+  
+  return { validRecipients, errors };
+}
+
+// Create campaign with file upload
+router.post('/campaign',
+  sendLimiter,
+  authenticate,
+  authorize('marketing', 'admin'),
+  checkLimits('send'),
+  async (req, res, next) => {
+    try {
+      const {
+        name,
+        channel,
+        templateId,
+        recipients,
+        scheduling = { type: 'immediate' },
+        settings = {}
+      } = req.body;
+
+      // Validate required fields
+      if (!name || !channel || !templateId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name, channel, and templateId are required'
+        });
+      }
+
+      // Parse recipients if it's a string (file content)
+      let parsedRecipients = recipients;
+      if (typeof recipients === 'string') {
+        try {
+          // Try parsing as JSON first
+          parsedRecipients = JSON.parse(recipients);
+        } catch (jsonError) {
+          // If JSON parsing fails, try CSV
+          try {
+            parsedRecipients = parseCSV(recipients);
+          } catch (csvError) {
+            return res.status(400).json({
+              success: false,
+              message: 'Invalid file format. Must be valid JSON or CSV',
+              details: { json: jsonError.message, csv: csvError.message }
+            });
+          }
+        }
+      }
+
+      if (!Array.isArray(parsedRecipients) || parsedRecipients.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Recipients must be a non-empty array'
+        });
+      }
+
+      // Validate recipients
+      const validation = validateRecipients(parsedRecipients, channel);
+      
+      if (validation.errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Recipient validation failed',
+          errors: validation.errors.slice(0, 10) // Limit to first 10 errors
+        });
+      }
+
+      // Check recipient limits
+      if (validation.validRecipients.length > 10000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Maximum 10,000 recipients allowed per campaign'
+        });
+      }
+
+      // Validate template exists and access
+      const template = await Template.findById(templateId);
+      if (!template) {
+        return res.status(404).json({
+          success: false,
+          message: 'Template not found'
+        });
+      }
+
+      const hasAccess = 
+        template.owner.toString() === req.user._id.toString() ||
+        template.isPublic ||
+        template.collaborators.some(c => c.user.toString() === req.user._id.toString());
+
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to template'
+        });
+      }
+
+      // Create send job
+      const sendJobData = {
+        name: name.trim(),
+        templateId,
+        channel,
+        sender: req.user._id,
+        recipients: validation.validRecipients.map(recipient => ({
+          ...recipient,
+          status: 'pending'
+        })),
+        scheduling,
+        settings: {
+          trackOpens: channel === 'email' ? true : false,
+          trackClicks: channel === 'email' ? true : false,
+          unsubscribeLink: channel === 'email' ? true : false,
+          ...settings
+        },
+        status: scheduling.type === 'scheduled' ? 'scheduled' : 'draft',
+        progress: {
+          total: validation.validRecipients.length,
+          sent: 0,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          bounced: 0,
+          failed: 0
+        },
+        provider: {
+          name: getProviderName(channel),
+          config: {}
+        }
+      };
+
+      const sendJob = new SendJob(sendJobData);
+      await sendJob.save();
+
+      // Update template usage
+      await template.incrementUsage();
+
+      // If immediate send, start processing
+      if (scheduling.type === 'immediate') {
+        setImmediate(() => processSendJob(sendJob._id));
+      }
+
+      await sendJob.populate('sender', 'name email');
+      await sendJob.populate('templateId', 'name');
+
+      res.status(201).json({
+        success: true,
+        message: 'Campaign created successfully',
+        data: {
+          campaign: {
+            id: sendJob._id,
+            name: sendJob.name,
+            channel: sendJob.channel,
+            status: sendJob.status,
+            recipientCount: sendJob.progress.total,
+            scheduling: sendJob.scheduling,
+            template: sendJob.templateId,
+            createdAt: sendJob.createdAt
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('Campaign creation error:', error);
+      next(error);
+    }
+  }
+);
+
 // Create send job
 router.post('/',
   sendLimiter,
@@ -190,6 +420,51 @@ router.post('/',
     }
   }
 );
+
+// Get campaigns for user
+router.get('/campaigns', authenticate, async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const skip = (page - 1) * limit;
+
+    const query = { sender: req.user._id };
+    
+    if (req.query.status) {
+      query.status = req.query.status;
+    }
+    
+    if (req.query.channel) {
+      query.channel = req.query.channel;
+    }
+
+    const total = await SendJob.countDocuments(query);
+    const campaigns = await SendJob.find(query)
+      .populate('templateId', 'name description')
+      .populate('sender', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('name channel status progress scheduling settings analytics cost createdAt completedAt')
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        campaigns,
+        pagination: {
+          current: page,
+          total: Math.ceil(total / limit),
+          count: campaigns.length,
+          totalCount: total
+        }
+      }
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
 
 // Get send jobs for user
 router.get('/', authenticate, async (req, res, next) => {

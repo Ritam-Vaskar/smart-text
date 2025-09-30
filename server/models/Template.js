@@ -185,7 +185,9 @@ templateSchema.index({ category: 1 });
 templateSchema.index({ channel: 1 });
 templateSchema.index({ isPublic: 1, isArchived: 1 });
 templateSchema.index({ 'usage.lastUsed': -1 });
-templateSchema.index({ name: 'text', description: 'text' });
+// Text search index - using simple indexing to avoid language issues
+templateSchema.index({ name: 1 });
+templateSchema.index({ description: 1 });
 
 // Middleware to update usage stats
 templateSchema.methods.incrementUsage = function() {
