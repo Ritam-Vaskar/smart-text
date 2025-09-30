@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/layout/Navbar';
@@ -31,10 +31,10 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-      <div className="flex">
+      <div className="flex h-screen pt-16 lg:pt-0">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <main className="flex-1 ml-0 lg:ml-64 pt-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 lg:ml-64 lg:pt-16 overflow-auto">
+          <div className="h-full px-4 sm:px-6 lg:px-8 py-6">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />

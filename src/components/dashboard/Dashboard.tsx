@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Wand2, 
   FileText, 
@@ -6,8 +6,6 @@ import {
   TrendingUp, 
   Users, 
   Mail, 
-  MessageSquare, 
-  Phone,
   ArrowUp,
   ArrowDown,
   Activity
@@ -147,7 +145,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
             Welcome back, {user?.name?.split(' ')[0]}!
           </h1>
           <p className="text-gray-600 mt-1">
