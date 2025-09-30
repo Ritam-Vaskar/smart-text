@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import SMSTest from '../test/SMSTest';
 
 export default function Settings() {
   const { user, updateProfile } = useAuth();
@@ -132,6 +133,7 @@ export default function Settings() {
     { id: 'security', name: 'Security', icon: Shield },
     { id: 'api', name: 'API Keys', icon: Key },
     { id: 'preferences', name: 'Preferences', icon: Palette },
+    { id: 'sms-test', name: 'SMS Test', icon: Globe },
   ];
 
   return (
@@ -501,6 +503,12 @@ export default function Settings() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'sms-test' && (
+            <div className="p-6">
+              <SMSTest />
             </div>
           )}
         </div>

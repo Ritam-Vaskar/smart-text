@@ -299,6 +299,11 @@ sendJobSchema.methods.updateRecipientStatus = function(recipientEmail, status, d
   }
 };
 
+// Alias for updateProgress - used in webhook handlers
+sendJobSchema.methods.updateStatistics = function() {
+  return this.updateProgress();
+};
+
 // Virtual for completion percentage
 sendJobSchema.virtual('completionPercentage').get(function() {
   if (this.progress.total === 0) return 0;

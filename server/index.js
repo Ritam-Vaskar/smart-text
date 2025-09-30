@@ -13,6 +13,8 @@ import templateRoutes from './routes/templates.js';
 import sendRoutes from './routes/send.js';
 import analyticsRoutes from './routes/analytics.js';
 import userRoutes from './routes/users.js';
+import webhookRoutes from './routes/webhooks.js';
+import testRoutes from './routes/test.js';
 
 // Import middleware
 import { errorHandler } from './middleware/errorHandler.js';
@@ -63,6 +65,8 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/send', sendRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/test', testRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

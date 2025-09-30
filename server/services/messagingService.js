@@ -81,7 +81,16 @@ class MessagingService {
 
   async sendSMS(sendJob, recipient, content) {
     if (!this.twilioClient) {
-      throw new Error('SMS service not configured');
+      throw new Error('SMS service not configured - Twilio client not initialized');
+    }
+
+    if (!recipient.phone) {
+      throw new Error('Recipient phone number is required');
+    }
+
+    // Validate Twilio configuration
+    if (!process.env.TWILIO_PHONE_NUMBER) {
+      throw new Error('TWILIO_PHONE_NUMBER not configured');
     }
 
     let personalizedContent = this.personalizeContent(content, recipient);
@@ -91,6 +100,10 @@ class MessagingService {
       ? personalizedContent.body 
       : personalizedContent;
     
+    if (!smsBody || smsBody.trim().length === 0) {
+      throw new Error('SMS message body is empty');
+    }
+    
     // Truncate if too long
     const truncatedBody = smsBody.substring(0, 160);
     
@@ -99,19 +112,56 @@ class MessagingService {
       ? `${truncatedBody} Reply STOP to opt out.`
       : truncatedBody;
 
-    const message = await this.twilioClient.messages.create({
+    // Format phone number - ensure it has country code
+    let formattedPhone = recipient.phone.trim();
+    if (!formattedPhone.startsWith('+')) {
+      // Assume US number if no country code
+      formattedPhone = formattedPhone.startsWith('1') ? `+${formattedPhone}` : `+1${formattedPhone}`;
+    }
+
+    console.log(`Sending SMS to ${formattedPhone}:`, {
       body: finalBody,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: recipient.phone,
-      statusCallback: `${process.env.FRONTEND_URL}/api/webhooks/sms/${sendJob._id}`
+      originalPhone: recipient.phone
     });
 
-    return {
-      messageId: message.sid,
-      provider: 'twilio',
-      status: 'sent',
-      timestamp: new Date()
-    };
+    try {
+      const message = await this.twilioClient.messages.create({
+        body: finalBody,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: formattedPhone,
+        statusCallback: `http://localhost:5000/api/webhooks/sms/${sendJob._id}`
+      });
+
+      console.log(`SMS sent successfully to ${formattedPhone}, SID: ${message.sid}, Status: ${message.status}`);
+
+      return {
+        messageId: message.sid,
+        provider: 'twilio',
+        status: 'sent',
+        timestamp: new Date(),
+        twilioStatus: message.status
+      };
+    } catch (error) {
+      console.error(`SMS send error to ${formattedPhone}:`, {
+        error: error.message,
+        code: error.code,
+        moreInfo: error.moreInfo,
+        details: error.details
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = error.message;
+      if (error.code === 21211) {
+        errorMessage = 'Invalid phone number format';
+      } else if (error.code === 21608) {
+        errorMessage = 'Phone number is not a mobile number';
+      } else if (error.code === 21614) {
+        errorMessage = 'Phone number is invalid or not reachable';
+      }
+      
+      throw new Error(`Twilio SMS Error: ${errorMessage}`);
+    }
   }
 
   async sendWhatsApp(sendJob, recipient, content) {
@@ -125,19 +175,31 @@ class MessagingService {
       ? personalizedContent.body 
       : personalizedContent;
 
-    const message = await this.twilioClient.messages.create({
+    console.log(`Sending WhatsApp to ${recipient.phone}:`, {
       body: whatsappBody,
-      from: process.env.TWILIO_WHATSAPP_NUMBER,
-      to: `whatsapp:${recipient.phone}`,
-      statusCallback: `${process.env.FRONTEND_URL}/api/webhooks/whatsapp/${sendJob._id}`
+      from: process.env.TWILIO_WHATSAPP_NUMBER
     });
 
-    return {
-      messageId: message.sid,
-      provider: 'twilio',
-      status: 'sent',
-      timestamp: new Date()
-    };
+    try {
+      const message = await this.twilioClient.messages.create({
+        body: whatsappBody,
+        from: process.env.TWILIO_WHATSAPP_NUMBER,
+        to: `whatsapp:${recipient.phone}`,
+        statusCallback: `http://localhost:5000/api/webhooks/whatsapp/${sendJob._id}`
+      });
+
+      console.log(`WhatsApp sent successfully to ${recipient.phone}, SID: ${message.sid}`);
+
+      return {
+        messageId: message.sid,
+        provider: 'twilio',
+        status: 'sent',
+        timestamp: new Date()
+      };
+    } catch (error) {
+      console.error(`WhatsApp send error to ${recipient.phone}:`, error);
+      throw error;
+    }
   }
 
   personalizeContent(content, recipient) {
