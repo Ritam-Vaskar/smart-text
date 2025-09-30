@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { 
   Send, 
   Plus, 
@@ -16,7 +16,15 @@ import {
   Users,
   Mail,
   MessageSquare,
-  Phone
+  Phone,
+  ArrowLeft,
+  TrendingUp,
+  FileText,
+  Download,
+  MoreHorizontal,
+  Monitor,
+  Smartphone,
+  Tablet
 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -54,6 +62,40 @@ interface Campaign {
   createdAt: string;
   completedAt?: string;
 }
+
+// Helper functions
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'completed': return 'bg-emerald-100 text-emerald-700';
+    case 'sending': return 'bg-blue-100 text-blue-700';
+    case 'queued': return 'bg-amber-100 text-amber-700';
+    case 'paused': return 'bg-gray-100 text-gray-700';
+    case 'cancelled': return 'bg-red-100 text-red-700';
+    case 'failed': return 'bg-red-100 text-red-700';
+    default: return 'bg-gray-100 text-gray-700';
+  }
+};
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'completed': return CheckCircle;
+    case 'sending': return Play;
+    case 'queued': return Clock;
+    case 'paused': return Pause;
+    case 'cancelled': return XCircle;
+    case 'failed': return AlertCircle;
+    default: return Clock;
+  }
+};
+
+const getChannelIcon = (channel: string) => {
+  switch (channel) {
+    case 'email': return Mail;
+    case 'sms': return MessageSquare;
+    case 'whatsapp': return Phone;
+    default: return Mail;
+  }
+};
 
 export default function Campaigns() {
   return (
@@ -107,39 +149,6 @@ function CampaignsList() {
     } catch (error: any) {
       const message = error.response?.data?.message || `Failed to ${action} campaign`;
       toast.error(message);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-emerald-100 text-emerald-700';
-      case 'sending': return 'bg-blue-100 text-blue-700';
-      case 'queued': return 'bg-amber-100 text-amber-700';
-      case 'paused': return 'bg-gray-100 text-gray-700';
-      case 'cancelled': return 'bg-red-100 text-red-700';
-      case 'failed': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return CheckCircle;
-      case 'sending': return Play;
-      case 'queued': return Clock;
-      case 'paused': return Pause;
-      case 'cancelled': return XCircle;
-      case 'failed': return AlertCircle;
-      default: return Clock;
-    }
-  };
-
-  const getChannelIcon = (channel: string) => {
-    switch (channel) {
-      case 'email': return Mail;
-      case 'sms': return MessageSquare;
-      case 'whatsapp': return Phone;
-      default: return Mail;
     }
   };
 
@@ -370,10 +379,12 @@ function CampaignCard({
 
 function CampaignActions({ 
   campaign, 
-  onAction 
+  onAction,
+  showLabels = false
 }: {
   campaign: Campaign;
   onAction: (id: string, action: 'start' | 'pause' | 'cancel') => void;
+  showLabels?: boolean;
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -381,15 +392,49 @@ function CampaignActions({
   const canPause = campaign.status === 'sending';
   const canCancel = ['draft', 'queued', 'sending', 'paused'].includes(campaign.status);
 
+  if (showLabels) {
+    return (
+      <div className="flex items-center space-x-2">
+        {canStart && (
+          <button
+            onClick={() => onAction(campaign._id, 'start')}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+          >
+            <Play className="h-4 w-4" />
+            <span>Start</span>
+          </button>
+        )}
+        
+        {canPause && (
+          <button
+            onClick={() => onAction(campaign._id, 'pause')}
+            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+          >
+            <Pause className="h-4 w-4" />
+            <span>Pause</span>
+          </button>
+        )}
+        
+        {canCancel && (
+          <button
+            onClick={() => onAction(campaign._id, 'cancel')}
+            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            <Square className="h-4 w-4" />
+            <span>Cancel</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
         className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
       >
-        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-        </svg>
+        <MoreHorizontal className="h-4 w-4" />
       </button>
 
       {showMenu && (
@@ -521,10 +566,243 @@ function CampaignsSkeleton() {
 
 // Campaign Detail Component (placeholder)
 function CampaignDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [recipients, setRecipients] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+
+  useEffect(() => {
+    if (id) {
+      fetchCampaignDetails();
+    }
+  }, [id]);
+
+  const fetchCampaignDetails = async () => {
+    try {
+      setLoading(true);
+      const [campaignRes, recipientsRes, analyticsRes] = await Promise.all([
+        axios.get(`/send/${id}`),
+        axios.get(`/send/${id}/recipients`),
+        axios.get(`/analytics/campaigns/${id}`)
+      ]);
+      
+      setCampaign(campaignRes.data.data.sendJob);
+      setRecipients(recipientsRes.data.data.recipients || []);
+      setAnalytics(analyticsRes.data.data || null);
+    } catch (error) {
+      console.error('Failed to fetch campaign details:', error);
+      toast.error('Failed to load campaign details');
+      navigate('/campaigns');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCampaignAction = async (action: string) => {
+    try {
+      await axios.post(`/send/${id}/${action}`);
+      toast.success(`Campaign ${action}ed successfully`);
+      fetchCampaignDetails();
+    } catch (error) {
+      console.error(`Failed to ${action} campaign:`, error);
+      toast.error(`Failed to ${action} campaign`);
+    }
+  };
+
+  const downloadRecipients = () => {
+    if (!recipients.length) return;
+    
+    const csvContent = [
+      ['Name', 'Email/Phone', 'Status', 'Delivered At', 'Opened At', 'Clicked At'].join(','),
+      ...recipients.map((r: any) => [
+        r.name,
+        r.email || r.phone,
+        r.status,
+        r.deliveredAt ? new Date(r.deliveredAt).toLocaleString() : '',
+        r.openedAt ? new Date(r.openedAt).toLocaleString() : '',
+        r.clickedAt ? new Date(r.clickedAt).toLocaleString() : ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `campaign-${campaign?.name}-recipients.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return (
+      <div className="text-center py-12">
+        <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Campaign Not Found</h2>
+        <p className="text-gray-600 mb-4">The requested campaign could not be found.</p>
+        <button
+          onClick={() => navigate('/campaigns')}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Back to Campaigns
+        </button>
+      </div>
+    );
+  }
+
+  const StatusIcon = getStatusIcon(campaign.status);
+  const ChannelIcon = getChannelIcon(campaign.channel);
+  
+  const completionPercentage = campaign.progress && campaign.progress.total > 0 
+    ? Math.round((campaign.progress.sent / campaign.progress.total) * 100)
+    : 0;
+
   return (
-    <div className="text-center py-12">
-      <h2 className="text-2xl font-bold text-gray-900">Campaign Detail</h2>
-      <p className="text-gray-600">Campaign detail view coming soon...</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate('/campaigns')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            </button>
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <ChannelIcon className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{campaign.name}</h1>
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                <span className="capitalize">{campaign.channel} Campaign</span>
+                <span>•</span>
+                <span>Created {new Date(campaign.createdAt).toLocaleDateString()}</span>
+                {campaign.templateId && (
+                  <>
+                    <span>•</span>
+                    <span>Template: {campaign.templateId.name}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3">
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(campaign.status)}`}>
+              <StatusIcon className="h-4 w-4 mr-2" />
+              {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+            </span>
+            <CampaignActions 
+              campaign={campaign} 
+              onAction={(_id: string, action: string) => handleCampaignAction(action)}
+              showLabels={true}
+            />
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="mb-6">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>Campaign Progress</span>
+            <span>{completionPercentage}% complete</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div 
+              className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+              style={{ width: `${completionPercentage}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="text-center p-3 bg-gray-50 rounded-lg">
+            <div className="text-2xl font-bold text-gray-900">
+              {(campaign.progress?.total || 0).toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-600">Recipients</div>
+          </div>
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">
+              {(campaign.progress?.delivered || 0).toLocaleString()}
+            </div>
+            <div className="text-xs text-gray-600">Delivered</div>
+          </div>
+          <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">
+              {(campaign.analytics?.openRate || 0).toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-600">Open Rate</div>
+          </div>
+          <div className="text-center p-3 bg-purple-50 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600">
+              {(campaign.analytics?.clickRate || 0).toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-600">Click Rate</div>
+          </div>
+          <div className="text-center p-3 bg-red-50 rounded-lg">
+            <div className="text-2xl font-bold text-red-600">
+              {(campaign.analytics?.bounceRate || 0).toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-600">Bounce Rate</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {[
+              { id: 'overview', label: 'Overview', icon: BarChart3 },
+              { id: 'recipients', label: 'Recipients', icon: Users },
+              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+              { id: 'content', label: 'Content', icon: FileText }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'overview' && (
+            <CampaignOverview campaign={campaign} analytics={analytics} />
+          )}
+          {activeTab === 'recipients' && (
+            <CampaignRecipients 
+              recipients={recipients} 
+              onDownload={downloadRecipients}
+            />
+          )}
+          {activeTab === 'analytics' && (
+            <CampaignAnalytics campaign={campaign} analytics={analytics} />
+          )}
+          {activeTab === 'content' && (
+            <CampaignContent campaign={campaign} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1257,6 +1535,575 @@ function ReviewStep({ campaignData, templates }: any) {
               Once you create this campaign, messages will be {campaignData.scheduling.type === 'immediate' ? 'sent immediately' : 'queued for sending'}. 
               Make sure all details are correct before proceeding.
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Campaign Detail Tab Components
+function CampaignOverview({ campaign }: any) {
+  const deliveryRate = campaign.progress?.total > 0 
+    ? ((campaign.progress.delivered / campaign.progress.total) * 100).toFixed(1)
+    : '0';
+
+  return (
+    <div className="space-y-6">
+      {/* Campaign Info */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Campaign Information</h3>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Status:</span>
+              <span className={`font-medium ${
+                campaign.status === 'completed' ? 'text-green-600' :
+                campaign.status === 'failed' ? 'text-red-600' :
+                campaign.status === 'sending' ? 'text-blue-600' : 'text-gray-600'
+              }`}>
+                {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
+              </span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Channel:</span>
+              <span className="font-medium capitalize">{campaign.channel}</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Created:</span>
+              <span className="font-medium">{new Date(campaign.createdAt).toLocaleString()}</span>
+            </div>
+            
+            {campaign.completedAt && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Completed:</span>
+                <span className="font-medium">{new Date(campaign.completedAt).toLocaleString()}</span>
+              </div>
+            )}
+            
+            {campaign.scheduling?.type === 'scheduled' && campaign.scheduling.scheduledAt && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Scheduled:</span>
+                <span className="font-medium">{new Date(campaign.scheduling.scheduledAt).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900">Performance Summary</h3>
+          
+          <div className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Delivery Rate:</span>
+              <span className="font-medium text-green-600">{deliveryRate}%</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Open Rate:</span>
+              <span className="font-medium text-blue-600">
+                {(campaign.analytics?.openRate || 0).toFixed(1)}%
+              </span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Click Rate:</span>
+              <span className="font-medium text-purple-600">
+                {(campaign.analytics?.clickRate || 0).toFixed(1)}%
+              </span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Bounce Rate:</span>
+              <span className="font-medium text-red-600">
+                {(campaign.analytics?.bounceRate || 0).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Settings */}
+      {campaign.settings && (
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Campaign Settings</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {campaign.channel === 'email' && (
+              <>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${campaign.settings.trackOpens ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-gray-600">Track Opens</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${campaign.settings.trackClicks ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-gray-600">Track Clicks</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${campaign.settings.unsubscribeLink ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-gray-600">Unsubscribe Link</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CampaignRecipients({ recipients, onDownload }: any) {
+  const [filteredRecipients, setFilteredRecipients] = useState(recipients);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    let filtered = recipients;
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((r: any) => r.status === statusFilter);
+    }
+    
+    if (searchTerm) {
+      filtered = filtered.filter((r: any) => 
+        r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.email && r.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (r.phone && r.phone.includes(searchTerm))
+      );
+    }
+    
+    setFilteredRecipients(filtered);
+  }, [recipients, statusFilter, searchTerm]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'delivered': return 'bg-green-100 text-green-800';
+      case 'opened': return 'bg-blue-100 text-blue-800';
+      case 'clicked': return 'bg-purple-100 text-purple-800';
+      case 'bounced': return 'bg-red-100 text-red-800';
+      case 'failed': return 'bg-red-100 text-red-800';
+      case 'sent': return 'bg-yellow-100 text-yellow-800';
+      case 'pending': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const statusCounts = recipients.reduce((acc: any, recipient: any) => {
+    acc[recipient.status] = (acc[recipient.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  return (
+    <div className="space-y-6">
+      {/* Stats and Filters */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-6">
+          <div className="text-sm text-gray-600">
+            Total: <span className="font-medium text-gray-900">{recipients.length}</span>
+          </div>
+          {Object.entries(statusCounts).map(([status, count]: [string, any]) => (
+            <div key={status} className="text-sm text-gray-600">
+              <span className="capitalize">{status}</span>: 
+              <span className="font-medium text-gray-900 ml-1">{count}</span>
+            </div>
+          ))}
+        </div>
+        
+        <button
+          onClick={onDownload}
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          <Download className="h-4 w-4" />
+          <span>Export CSV</span>
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center space-x-4">
+        <div className="flex-1">
+          <input
+            type="text"
+            placeholder="Search recipients..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="sent">Sent</option>
+          <option value="delivered">Delivered</option>
+          <option value="opened">Opened</option>
+          <option value="clicked">Clicked</option>
+          <option value="bounced">Bounced</option>
+          <option value="failed">Failed</option>
+        </select>
+      </div>
+
+      {/* Recipients Table */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Recipient
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Contact
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Delivered
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Opened
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Clicked
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredRecipients.map((recipient: any, index: number) => (
+                <tr key={index} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{recipient.name}</div>
+                    {recipient.customFields && Object.keys(recipient.customFields).length > 0 && (
+                      <div className="text-xs text-gray-500">
+                        {Object.keys(recipient.customFields).length} custom field(s)
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {recipient.email || recipient.phone}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(recipient.status)}`}>
+                      {recipient.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {recipient.deliveredAt ? new Date(recipient.deliveredAt).toLocaleString() : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {recipient.openedAt ? new Date(recipient.openedAt).toLocaleString() : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {recipient.clickedAt ? new Date(recipient.clickedAt).toLocaleString() : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        
+        {filteredRecipients.length === 0 && (
+          <div className="text-center py-8">
+            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Recipients Found</h3>
+            <p className="text-gray-600">
+              {searchTerm || statusFilter !== 'all' 
+                ? 'Try adjusting your filters to see more recipients.'
+                : 'This campaign has no recipients.'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CampaignAnalytics({ campaign }: any) {
+  const [timeRange, setTimeRange] = useState('24h');
+
+  // Mock data for charts - in real app, this would come from analytics API
+  const hourlyData = Array.from({ length: 24 }, (_, i) => ({
+    hour: i,
+    opens: Math.floor(Math.random() * 50),
+    clicks: Math.floor(Math.random() * 20),
+    deliveries: Math.floor(Math.random() * 100)
+  }));
+
+  const deviceData = [
+    { name: 'Desktop', value: 45, icon: Monitor },
+    { name: 'Mobile', value: 40, icon: Smartphone },
+    { name: 'Tablet', value: 15, icon: Tablet }
+  ];
+
+  const locationData = [
+    { country: 'United States', opens: 245, clicks: 89 },
+    { country: 'United Kingdom', opens: 156, clicks: 67 },
+    { country: 'Canada', opens: 98, clicks: 34 },
+    { country: 'Australia', opens: 78, clicks: 23 },
+    { country: 'Germany', opens: 65, clicks: 19 }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Time Range Selector */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Campaign Analytics</h3>
+        <select
+          value={timeRange}
+          onChange={(e) => setTimeRange(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="1h">Last Hour</option>
+          <option value="24h">Last 24 Hours</option>
+          <option value="7d">Last 7 Days</option>
+          <option value="30d">Last 30 Days</option>
+        </select>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-600">Total Opens</p>
+              <p className="text-2xl font-bold text-blue-900">
+                {campaign.progress?.opened || 0}
+              </p>
+            </div>
+            <Eye className="h-8 w-8 text-blue-600" />
+          </div>
+          <p className="text-xs text-blue-600 mt-1">
+            +12% from yesterday
+          </p>
+        </div>
+
+        <div className="bg-purple-50 p-4 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-purple-600">Total Clicks</p>
+              <p className="text-2xl font-bold text-purple-900">
+                {campaign.progress?.clicked || 0}
+              </p>
+            </div>
+            <TrendingUp className="h-8 w-8 text-purple-600" />
+          </div>
+          <p className="text-xs text-purple-600 mt-1">
+            +8% from yesterday
+          </p>
+        </div>
+
+        <div className="bg-green-50 p-4 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-600">Engagement Rate</p>
+              <p className="text-2xl font-bold text-green-900">
+                {((campaign.progress?.opened || 0) / (campaign.progress?.delivered || 1) * 100).toFixed(1)}%
+              </p>
+            </div>
+            <BarChart3 className="h-8 w-8 text-green-600" />
+          </div>
+          <p className="text-xs text-green-600 mt-1">
+            Above average
+          </p>
+        </div>
+
+        <div className="bg-orange-50 p-4 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-orange-600">Avg. Open Time</p>
+              <p className="text-2xl font-bold text-orange-900">2.3s</p>
+            </div>
+            <Clock className="h-8 w-8 text-orange-600" />
+          </div>
+          <p className="text-xs text-orange-600 mt-1">
+            -0.5s from yesterday
+          </p>
+        </div>
+      </div>
+
+      {/* Activity Timeline */}
+      <div className="bg-gray-50 rounded-lg p-6">
+        <h4 className="text-md font-semibold text-gray-900 mb-4">Activity Over Time</h4>
+        <div className="h-64 flex items-end space-x-1">
+          {hourlyData.map((data, index) => (
+            <div
+              key={index}
+              className="flex-1 bg-blue-200 rounded-t"
+              style={{ height: `${(data.opens / 50) * 100}%` }}
+              title={`${data.hour}:00 - ${data.opens} opens`}
+            ></div>
+          ))}
+        </div>
+        <div className="flex justify-between text-xs text-gray-500 mt-2">
+          <span>00:00</span>
+          <span>06:00</span>
+          <span>12:00</span>
+          <span>18:00</span>
+          <span>23:59</span>
+        </div>
+      </div>
+
+      {/* Device Breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="text-md font-semibold text-gray-900 mb-4">Device Breakdown</h4>
+          <div className="space-y-3">
+            {deviceData.map((device) => (
+              <div key={device.name} className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <device.icon className="h-5 w-5 text-gray-600" />
+                  <span className="text-sm text-gray-900">{device.name}</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-16 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full"
+                      style={{ width: `${device.value}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{device.value}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h4 className="text-md font-semibold text-gray-900 mb-4">Top Locations</h4>
+          <div className="space-y-3">
+            {locationData.map((location, index) => (
+              <div key={location.country} className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-medium text-gray-600">{index + 1}</span>
+                  </div>
+                  <span className="text-sm text-gray-900">{location.country}</span>
+                </div>
+                <div className="flex space-x-4 text-sm">
+                  <span className="text-blue-600">{location.opens} opens</span>
+                  <span className="text-purple-600">{location.clicks} clicks</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CampaignContent({ campaign }: any) {
+  const [showRawContent, setShowRawContent] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Campaign Content</h3>
+        <button
+          onClick={() => setShowRawContent(!showRawContent)}
+          className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+        >
+          {showRawContent ? 'Show Rendered' : 'Show Raw'}
+        </button>
+      </div>
+
+      {campaign.templateId ? (
+        <div className="space-y-4">
+          <div className="flex items-center space-x-3 p-4 bg-blue-50 rounded-lg">
+            <FileText className="h-5 w-5 text-blue-600" />
+            <div>
+              <div className="font-medium text-blue-900">Template: {campaign.templateId.name}</div>
+              <div className="text-sm text-blue-700">This campaign uses a saved template</div>
+            </div>
+          </div>
+
+          {campaign.templateId.content && (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              {campaign.channel === 'email' && campaign.templateId.content.subject && (
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  <div className="text-sm font-medium text-gray-700">Subject Line</div>
+                  <div className="mt-1 text-gray-900">
+                    {showRawContent 
+                      ? campaign.templateId.content.subject
+                      : campaign.templateId.content.subject.replace(/\{\{(\w+)\}\}/g, '[Variable: $1]')
+                    }
+                  </div>
+                </div>
+              )}
+              
+              <div className="p-4">
+                <div className="text-sm font-medium text-gray-700 mb-2">Message Body</div>
+                <div className="prose max-w-none">
+                  {showRawContent ? (
+                    <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded border">
+                      {campaign.templateId.content.body}
+                    </pre>
+                  ) : (
+                    <div className="text-gray-900 whitespace-pre-wrap">
+                      {campaign.templateId.content.body.replace(/\{\{(\w+)\}\}/g, '[Variable: $1]')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : campaign.customContent ? (
+        <div className="space-y-4">
+          <div className="flex items-center space-x-3 p-4 bg-purple-50 rounded-lg">
+            <FileText className="h-5 w-5 text-purple-600" />
+            <div>
+              <div className="font-medium text-purple-900">Custom Content</div>
+              <div className="text-sm text-purple-700">This campaign uses custom content</div>
+            </div>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            {campaign.channel === 'email' && campaign.customContent.subject && (
+              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                <div className="text-sm font-medium text-gray-700">Subject Line</div>
+                <div className="mt-1 text-gray-900">{campaign.customContent.subject}</div>
+              </div>
+            )}
+            
+            <div className="p-4">
+              <div className="text-sm font-medium text-gray-700 mb-2">Message Body</div>
+              <div className="prose max-w-none">
+                <div className="text-gray-900 whitespace-pre-wrap">
+                  {campaign.customContent.body}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Content Available</h3>
+          <p className="text-gray-600">Campaign content could not be loaded.</p>
+        </div>
+      )}
+
+      {/* Variables Used */}
+      <div className="border-t pt-6">
+        <h4 className="font-medium text-gray-900 mb-3">Variables & Personalization</h4>
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="text-sm text-gray-600 mb-2">Available variables for personalization:</div>
+          <div className="flex flex-wrap gap-2">
+            {['name', 'email', 'phone', 'company', 'firstName', 'lastName'].map((variable) => (
+              <span
+                key={variable}
+                className="inline-flex px-2 py-1 bg-white border border-gray-200 rounded text-xs font-mono text-gray-700"
+              >
+                {`{{${variable}}}`}
+              </span>
+            ))}
           </div>
         </div>
       </div>

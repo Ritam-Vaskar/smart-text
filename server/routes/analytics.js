@@ -485,4 +485,98 @@ function calculateStatisticalSignificance(variants) {
   return Math.round(z * 50); // Rough approximation
 }
 
+// Get analytics for a specific campaign
+router.get('/campaigns/:id', authenticate, async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const campaignId = req.params.id;
+
+    // Get campaign details
+    const campaign = await SendJob.findOne({
+      _id: campaignId,
+      sender: userId
+    }).select('name channel progress analytics recipients createdAt completedAt');
+
+    if (!campaign) {
+      return res.status(404).json({
+        success: false,
+        message: 'Campaign not found'
+      });
+    }
+
+    // Calculate time-based analytics (mock data for now)
+    const hourlyActivity = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      opens: Math.floor(Math.random() * (campaign.progress.opened / 4)),
+      clicks: Math.floor(Math.random() * (campaign.progress.clicked / 4)),
+      deliveries: Math.floor(Math.random() * (campaign.progress.delivered / 4))
+    }));
+
+    // Device breakdown (mock data)
+    const deviceBreakdown = {
+      desktop: Math.floor(Math.random() * 60) + 20,
+      mobile: Math.floor(Math.random() * 50) + 30,
+      tablet: Math.floor(Math.random() * 30) + 10
+    };
+
+    // Top locations (mock data based on recipients)
+    const topLocations = [
+      { country: 'United States', opens: Math.floor(campaign.progress.opened * 0.4), clicks: Math.floor(campaign.progress.clicked * 0.4) },
+      { country: 'United Kingdom', opens: Math.floor(campaign.progress.opened * 0.2), clicks: Math.floor(campaign.progress.clicked * 0.2) },
+      { country: 'Canada', opens: Math.floor(campaign.progress.opened * 0.15), clicks: Math.floor(campaign.progress.clicked * 0.15) },
+      { country: 'Australia', opens: Math.floor(campaign.progress.opened * 0.1), clicks: Math.floor(campaign.progress.clicked * 0.1) },
+      { country: 'Germany', opens: Math.floor(campaign.progress.opened * 0.1), clicks: Math.floor(campaign.progress.clicked * 0.1) }
+    ];
+
+    // Engagement metrics
+    const engagementRate = campaign.progress.delivered > 0 
+      ? ((campaign.progress.opened + campaign.progress.clicked) / campaign.progress.delivered * 100)
+      : 0;
+
+    const avgOpenTime = '2.3s'; // Mock data
+    const peakActivityHour = hourlyActivity.reduce((max, curr) => 
+      curr.opens > max.opens ? curr : max
+    ).hour;
+
+    res.json({
+      success: true,
+      data: {
+        campaign: {
+          id: campaign._id,
+          name: campaign.name,
+          channel: campaign.channel,
+          createdAt: campaign.createdAt,
+          completedAt: campaign.completedAt
+        },
+        overview: {
+          totalRecipients: campaign.progress.total,
+          delivered: campaign.progress.delivered,
+          opened: campaign.progress.opened,
+          clicked: campaign.progress.clicked,
+          bounced: campaign.progress.bounced,
+          failed: campaign.progress.failed,
+          deliveryRate: campaign.progress.total > 0 ? (campaign.progress.delivered / campaign.progress.total * 100) : 0,
+          openRate: campaign.analytics.openRate,
+          clickRate: campaign.analytics.clickRate,
+          bounceRate: campaign.analytics.bounceRate,
+          engagementRate
+        },
+        timelineData: {
+          hourly: hourlyActivity,
+          peakActivityHour,
+          avgOpenTime
+        },
+        demographics: {
+          devices: deviceBreakdown,
+          locations: topLocations
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Campaign analytics error:', error);
+    next(error);
+  }
+});
+
 export default router;
