@@ -12,7 +12,7 @@ router.get('/', authenticate, validateQuery(Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(20),
   search: Joi.string().max(200),
-  category: Joi.string().valid('marketing', 'transactional', 'notification', 'seasonal', 'other'),
+  category: Joi.string().valid('marketing', 'transactional', 'notification', 'newsletter', 'seasonal', 'other'),
   channel: Joi.string().valid('email', 'sms', 'whatsapp'),
   tags: Joi.string(),
   folder: Joi.string(),
@@ -156,9 +156,11 @@ router.post('/',
         owner: req.user._id
       };
 
-      // Extract placeholders from content
-      const placeholders = extractPlaceholders(req.body.content);
-      templateData.placeholders = placeholders;
+      // Use provided placeholders or auto-extract from content
+      if (!req.body.placeholders || req.body.placeholders.length === 0) {
+        const placeholders = extractPlaceholders(req.body.content);
+        templateData.placeholders = placeholders;
+      }
 
       const template = new Template(templateData);
       await template.save();
@@ -297,8 +299,8 @@ router.put('/:id',
         });
       }
 
-      // Update placeholders if content changed
-      if (req.body.content) {
+      // Update placeholders if content changed and no manual placeholders provided
+      if (req.body.content && (!req.body.placeholders || req.body.placeholders.length === 0)) {
         req.body.placeholders = extractPlaceholders(req.body.content);
       }
 
@@ -638,7 +640,8 @@ router.get('/tags/list', authenticate, async (req, res, next) => {
 // Helper function to extract placeholders from content
 function extractPlaceholders(content) {
   const placeholders = [];
-  const tokenRegex = /\{([^}]+)\}/g;
+  // Updated regex to match double curly braces {{placeholder}}
+  const tokenRegex = /\{\{([^}]+)\}\}/g;
   let match;
 
   const contentStr = typeof content === 'object' 
@@ -646,7 +649,7 @@ function extractPlaceholders(content) {
     : String(content);
 
   while ((match = tokenRegex.exec(contentStr)) !== null) {
-    const tokenName = match[1];
+    const tokenName = match[1].trim();
     if (!placeholders.some(p => p.name === tokenName)) {
       placeholders.push({
         name: tokenName,

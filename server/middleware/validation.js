@@ -126,17 +126,25 @@ export const schemas = {
   createTemplate: Joi.object({
     name: Joi.string().required().min(1).max(200),
     description: Joi.string().max(500),
-    category: Joi.string().valid('marketing', 'transactional', 'notification', 'seasonal', 'other').default('other'),
+    category: Joi.string().valid('marketing', 'transactional', 'notification', 'newsletter', 'seasonal', 'other').default('other'),
     tags: Joi.array().items(Joi.string().max(50)).max(10),
     channel: Joi.array().items(Joi.string().valid('email', 'sms', 'whatsapp')).min(1),
     language: Joi.string().default('en'),
-    tone: Joi.string().valid('casual', 'formal', 'friendly', 'professional', 'urgent', 'warm').default('friendly'),
-    audience: Joi.string().valid('customers', 'staff', 'partners', 'general').default('customers'),
+    tone: Joi.string().valid('casual', 'formal', 'friendly', 'professional', 'urgent', 'warm', 'empathetic').default('friendly'),
+    audience: Joi.string().valid('customers', 'staff', 'partners', 'general', 'employees', 'prospects').default('customers'),
     content: Joi.object({
       subject: Joi.string().max(200),
       body: Joi.string().required().min(1).max(10000),
       preheader: Joi.string().max(200)
     }).required(),
+    placeholders: Joi.array().items(
+      Joi.object({
+        name: Joi.string().required().min(1).max(50),
+        description: Joi.string().max(200),
+        required: Joi.boolean().default(false),
+        defaultValue: Joi.string().max(100)
+      })
+    ).default([]),
     isPublic: Joi.boolean().default(false),
     folder: Joi.string().default('General')
   }),
@@ -144,17 +152,25 @@ export const schemas = {
   updateTemplate: Joi.object({
     name: Joi.string().min(1).max(200),
     description: Joi.string().max(500),
-    category: Joi.string().valid('marketing', 'transactional', 'notification', 'seasonal', 'other'),
+    category: Joi.string().valid('marketing', 'transactional', 'notification', 'newsletter', 'seasonal', 'other'),
     tags: Joi.array().items(Joi.string().max(50)).max(10),
     channel: Joi.array().items(Joi.string().valid('email', 'sms', 'whatsapp')).min(1),
     language: Joi.string(),
-    tone: Joi.string().valid('casual', 'formal', 'friendly', 'professional', 'urgent', 'warm'),
-    audience: Joi.string().valid('customers', 'staff', 'partners', 'general'),
+    tone: Joi.string().valid('casual', 'formal', 'friendly', 'professional', 'urgent', 'warm', 'empathetic'),
+    audience: Joi.string().valid('customers', 'staff', 'partners', 'general', 'employees', 'prospects'),
     content: Joi.object({
       subject: Joi.string().max(200),
       body: Joi.string().min(1).max(10000),
       preheader: Joi.string().max(200)
     }),
+    placeholders: Joi.array().items(
+      Joi.object({
+        name: Joi.string().required().min(1).max(50),
+        description: Joi.string().max(200),
+        required: Joi.boolean().default(false),
+        defaultValue: Joi.string().max(100)
+      })
+    ),
     isPublic: Joi.boolean(),
     folder: Joi.string(),
     isArchived: Joi.boolean()

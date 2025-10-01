@@ -34,7 +34,7 @@ const templateSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['marketing', 'transactional', 'notification', 'seasonal', 'other'],
+    enum: ['marketing', 'transactional', 'notification', 'newsletter', 'seasonal', 'other'],
     default: 'other'
   },
   tags: [{
@@ -53,12 +53,12 @@ const templateSchema = new mongoose.Schema({
   },
   tone: {
     type: String,
-    enum: ['casual', 'formal', 'friendly', 'professional', 'urgent', 'warm'],
+    enum: ['casual', 'formal', 'friendly', 'professional', 'urgent', 'warm', 'empathetic'],
     default: 'friendly'
   },
   audience: {
     type: String,
-    enum: ['customers', 'staff', 'partners', 'general'],
+    enum: ['customers', 'staff', 'partners', 'general', 'employees', 'prospects'],
     default: 'customers'
   },
   content: {
